@@ -1376,11 +1376,19 @@ static inline void intel_pstate_adjust_busy_pstate(struct cpudata *cpu)
 		fp_toint(cpu->iowait_boost * 100));
 }
 
+	/* Don't allow remote callbacks */
+	if (smp_processor_id() != cpu->cpu)
+		return;
+
 static void intel_pstate_update_util(struct update_util_data *data, u64 time,
 				     unsigned int flags)
 {
 	struct cpudata *cpu = container_of(data, struct cpudata, update_util);
 	u64 delta_ns;
+
+	/* Don't allow remote callbacks */
+	if (smp_processor_id() != cpu->cpu)
+		return;
 
 	if (pid_params.boost_iowait) {
 		if (flags & SCHED_CPUFREQ_IOWAIT) {
