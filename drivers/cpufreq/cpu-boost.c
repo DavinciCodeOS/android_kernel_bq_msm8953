@@ -47,11 +47,6 @@ static bool input_boost_enabled;
 static unsigned int input_boost_ms = 40;
 module_param(input_boost_ms, uint, 0644);
 
-static unsigned int sched_boost_on_input;
-module_param(sched_boost_on_input, uint, 0644);
-
-static bool sched_boost_active;
-
 static struct delayed_work input_boost_rem;
 static u64 last_input_time;
 #define MIN_INPUT_INTERVAL (150 * USEC_PER_MSEC)
@@ -174,7 +169,7 @@ static void update_policy_online(void)
 
 static void do_input_boost_rem(struct work_struct *work)
 {
-	unsigned int i, ret;
+	unsigned int i;
 	struct cpu_sync *i_sync_info;
 
 	/* Reset the input_boost_min for all CPUs in the system */
@@ -186,27 +181,16 @@ static void do_input_boost_rem(struct work_struct *work)
 
 	/* Update policies for all online CPUs */
 	update_policy_online();
-
-	if (sched_boost_active) {
-		ret = sched_set_boost(0);
-		if (ret)
-			pr_err("cpu-boost: HMP boost disable failed\n");
-		sched_boost_active = false;
-	}
 	
 	is_special_input_boost=false;
 }
 
 static void do_input_boost(struct work_struct *work)
 {
-	unsigned int i, ret;
+	unsigned int i;
 	struct cpu_sync *i_sync_info;
 
 	cancel_delayed_work_sync(&input_boost_rem);
-	if (sched_boost_active) {
-		sched_set_boost(0);
-		sched_boost_active = false;
-	}
 
 	if (is_special_input_boost)
 	{
@@ -218,15 +202,6 @@ static void do_input_boost(struct work_struct *work)
 		}
 		
 		update_policy_online();
-
-		/* Enable scheduler boost to migrate tasks to big cluster */
-		if (sched_boost_on_input > 0) {
-			ret = sched_set_boost(1);
-			if (ret)
-				pr_err("cpu-boost: HMP boost enable failed\n");
-			else
-				sched_boost_active = true;
-		}
 
 		queue_delayed_work(cpu_boost_wq, &input_boost_rem,
 						msecs_to_jiffies(special_input_boost_ms));
@@ -240,15 +215,6 @@ static void do_input_boost(struct work_struct *work)
 
 		/* Update policies for all online CPUs */
 		update_policy_online();
-
-		/* Enable scheduler boost to migrate tasks to big cluster */
-		if (sched_boost_on_input > 0) {
-			ret = sched_set_boost(sched_boost_on_input);
-			if (ret)
-				pr_err("cpu-boost: HMP boost enable failed\n");
-			else
-				sched_boost_active = true;
-		}
 
 		queue_delayed_work(cpu_boost_wq, &input_boost_rem,
 						msecs_to_jiffies(input_boost_ms));
