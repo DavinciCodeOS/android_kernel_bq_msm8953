@@ -421,8 +421,11 @@ static void vmpressure_global(gfp_t gfp, unsigned long scanned,
  * This function does not return any value.
  */
 void vmpressure(gfp_t gfp, struct mem_cgroup *memcg, bool tree,
-		unsigned long scanned, unsigned long reclaimed)
+		unsigned long scanned, unsigned long reclaimed, int order)
 {
+	if (order > PAGE_ALLOC_COSTLY_ORDER)
+		return;
+
 	if (!memcg && tree)
 		vmpressure_global(gfp, scanned, reclaimed);
 
@@ -457,7 +460,7 @@ void vmpressure_prio(gfp_t gfp, struct mem_cgroup *memcg, int prio)
 	 * to the vmpressure() basically means that we signal 'critical'
 	 * level.
 	 */
-	vmpressure(gfp, memcg, true, vmpressure_win, 0);
+	vmpressure(gfp, memcg, true, vmpressure_win, 0, order);
 }
 
 /**
