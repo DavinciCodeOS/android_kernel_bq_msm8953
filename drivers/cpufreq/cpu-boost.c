@@ -23,14 +23,6 @@
 #include <linux/input.h>
 #include <linux/time.h>
 
-#define MIN_CPUFEQ_SPECIAL_BOOST 1401000
-#define SPECIAL_BOOST_MS_FP 500
-#define SPECIAL_BOOST_MS_POWERKEY 300
-static unsigned int special_input_boost_ms = SPECIAL_BOOST_MS_POWERKEY;
-module_param(special_input_boost_ms, uint, 0644);
-
-static bool is_special_input_boost = false;
-
 struct cpu_sync {
 	int cpu;
 	unsigned int input_boost_min;
@@ -192,7 +184,6 @@ static void do_input_boost_rem(struct work_struct *work)
 	/* Update policies for all online CPUs */
 	update_policy_online();
 	
-	is_special_input_boost=false;
 }
 
 static void do_input_boost(struct work_struct *work)
@@ -202,38 +193,23 @@ static void do_input_boost(struct work_struct *work)
 
 	cancel_delayed_work_sync(&input_boost_rem);
 
-	if (is_special_input_boost)
-	{
-		/* Set the input_boost_min for all CPUs in the system */
-		pr_debug("Setting input boost min for all CPUs\n");
-		for_each_possible_cpu(i) {
-			i_sync_info = &per_cpu(sync_info, i);
-			i_sync_info->input_boost_min = MIN_CPUFEQ_SPECIAL_BOOST;
-		}
-		
-		update_policy_online();
+	/* Set the input_boost_min for all CPUs in the system */
+	pr_debug("Setting input boost min for all CPUs\n");
+	for_each_possible_cpu(i) {
+		i_sync_info = &per_cpu(sync_info, i);
+		i_sync_info->input_boost_min = i_sync_info->input_boost_freq;
+	}
 
-		queue_delayed_work(cpu_boost_wq, &input_boost_rem,
-						msecs_to_jiffies(special_input_boost_ms));
-	} else {
-		/* Set the input_boost_min for all CPUs in the system */
-		pr_debug("Setting input boost min for all CPUs\n");
-		for_each_possible_cpu(i) {
-			i_sync_info = &per_cpu(sync_info, i);
-			i_sync_info->input_boost_min = i_sync_info->input_boost_freq;
-		}
-
-		/* Update policies for all online CPUs */
-		update_policy_online();
+	/* Update policies for all online CPUs */
+	update_policy_online();
 
 #ifdef CONFIG_DYNAMIC_STUNE_BOOST
 	/* Set dynamic stune boost value */
 	do_stune_boost("top-app", dynamic_stune_boost);
 #endif /* CONFIG_DYNAMIC_STUNE_BOOST */
 
-		queue_delayed_work(cpu_boost_wq, &input_boost_rem,
-						msecs_to_jiffies(input_boost_ms));
-	}
+	queue_delayed_work(cpu_boost_wq, &input_boost_rem,
+					msecs_to_jiffies(input_boost_ms));
 }
 
 static void cpuboost_input_event(struct input_handle *handle,
@@ -241,21 +217,7 @@ static void cpuboost_input_event(struct input_handle *handle,
 {
 	u64 now;
 
-	if (is_special_input_boost)
-		return;
-		
-	if (code == 116 && value == 1) {
-		printk("special boost: power\n");
-		special_input_boost_ms = SPECIAL_BOOST_MS_POWERKEY;
-		is_special_input_boost = true;
-	} else if (code == 608 && value == 1) {
-		printk("special boost: FP_TAP\n");
-		special_input_boost_ms = SPECIAL_BOOST_MS_FP;
-		is_special_input_boost = true;
-	} else {
-		return;
-	}
-	if (!input_boost_enabled && !is_special_input_boost )
+	if (!input_boost_enabled)
 		return;
 
 	now = ktime_to_us(ktime_get());
