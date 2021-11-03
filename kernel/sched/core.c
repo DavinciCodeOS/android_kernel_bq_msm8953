@@ -10205,8 +10205,12 @@ static ssize_t cpu_uclamp_write(struct kernfs_open_file *of, char *buf,
 {
 	struct uclamp_request req;
 	struct task_group *tg;
+	char message[256] = {0};
 
-	req = capacity_from_percent(buf);
+	if (copy_from_user(message, buf, nbytes))
+		return -EFAULT;
+
+	req = capacity_from_percent(message);
 	if (req.ret)
 		return req.ret;
 
